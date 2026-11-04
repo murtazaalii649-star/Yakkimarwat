@@ -1,0 +1,758 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Poker Season Table</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800&family=IBM+Plex+Mono:wght@400;500;600&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Layout concept: a scoreboard. Condensed numerals lead; the leaderboard and history sit in the main column, entry forms in a side column that drops under the table on phones. */
+  :root {
+    --bg: #edf1ee;
+    --surface: #f7faf8;
+    --fg: #12201a;
+    --muted: #58675f;
+    --line: #c9d2cc;
+    --primary: #17493b;
+    --on-primary: #f3faf6;
+    --brass: #8b6a10;
+    --win: #1b7448;
+    --loss: #b2352a;
+    --focus: #2a7f68;
+    --font-display: 'Big Shoulders Display', 'Arial Narrow', Impact, sans-serif;
+    --font-body: 'Instrument Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-num: 'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e1512;
+      --surface: #151f1a;
+      --fg: #e5eee8;
+      --muted: #8fa198;
+      --line: #27352d;
+      --primary: #5cc3a0;
+      --on-primary: #0a1812;
+      --brass: #d6ae45;
+      --win: #5fcb93;
+      --loss: #f28a7e;
+      --focus: #6fd1b0;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0e1512;
+    --surface: #151f1a;
+    --fg: #e5eee8;
+    --muted: #8fa198;
+    --line: #27352d;
+    --primary: #5cc3a0;
+    --on-primary: #0a1812;
+    --brass: #d6ae45;
+    --win: #5fcb93;
+    --loss: #f28a7e;
+    --focus: #6fd1b0;
+    color-scheme: dark;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.5;
+    padding-block: 28px 64px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .page { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 36px; }
+  h1, h2, h3, p, ul { margin: 0; }
+  ul { padding: 0; list-style: none; }
+  button, input { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  /* Header */
+  .top { display: flex; flex-direction: column; gap: 18px; }
+  .kicker { font-size: 12px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+  .title-row { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px 24px; }
+  .title-block { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 320px; }
+  .season {
+    width: 100%; min-width: 0;
+    font-family: var(--font-display); font-weight: 800; text-transform: uppercase;
+    font-size: clamp(44px, 9vw, 80px); line-height: 0.95; letter-spacing: 0.01em;
+    background: transparent; border: 0; border-bottom: 2px dashed transparent; border-radius: 0; padding: 0 0 4px;
+  }
+  .season:hover:not([readonly]), .season:focus { border-bottom-color: var(--line); }
+  .season[readonly] { cursor: default; }
+  .meta-right { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; font-size: 13px; color: var(--muted); }
+  .cur { display: inline-flex; align-items: center; gap: 8px; }
+  .cur input { width: 64px; padding: 6px 8px; text-align: center; font-family: var(--font-num); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; }
+  .cur input[readonly] { border-color: transparent; background: transparent; text-align: left; width: auto; max-width: 6ch; padding-left: 0; }
+  .stats { display: flex; flex-wrap: wrap; gap: 14px 36px; padding-top: 14px; border-top: 2px solid var(--fg); }
+  .stats li { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .stats .k { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+  .stats .v { font-family: var(--font-num); font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+  .pos { color: var(--win); }
+  .neg { color: var(--loss); }
+
+  /* Layout */
+  .main { display: grid; grid-template-columns: minmax(0, 1fr) 400px; gap: 48px; align-items: start; }
+  .col { display: flex; flex-direction: column; gap: 40px; min-width: 0; }
+  @media (max-width: 979px) {
+    .main { display: flex; flex-direction: column; gap: 36px; }
+    .col { display: contents; }
+    #board { order: 1; }
+    #logPanel { order: 2; }
+    #history { order: 3; }
+    #players { order: 4; }
+  }
+  section { min-width: 0; }
+  h2 { font-family: var(--font-display); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; font-size: 24px; line-height: 1.1; margin-bottom: 14px; }
+  .panel { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 18px; }
+  .hint { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+
+  /* Leaderboard */
+  .table-wrap { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; }
+  th { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); text-align: right; padding: 8px 10px; border-bottom: 2px solid var(--fg); white-space: nowrap; }
+  td { padding: 12px 10px; border-bottom: 1px solid var(--line); text-align: right; font-family: var(--font-num); font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  th.who, td.who { text-align: left; position: sticky; left: 0; background: var(--bg); }
+  .board { min-width: 580px; }
+  td.who { font-family: var(--font-body); display: table-cell; }
+  .who-in { display: flex; align-items: baseline; gap: 12px; }
+  .rk { font-family: var(--font-display); font-weight: 800; font-size: 30px; line-height: 1; min-width: 28px; color: var(--muted); }
+  tr.lead .rk { color: var(--brass); }
+  .nm { font-weight: 600; font-size: 16px; overflow-wrap: anywhere; white-space: normal; }
+  td.net { font-size: 17px; font-weight: 600; }
+  tr.idle td { color: var(--muted); }
+  tfoot td { border-bottom: 0; border-top: 2px solid var(--fg); font-weight: 600; color: var(--fg); }
+  tfoot td.who { font-family: var(--font-body); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .empty { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 8px 0 4px; max-width: 52ch; }
+  .empty-title { font-family: var(--font-display); font-weight: 700; font-size: 30px; text-transform: uppercase; line-height: 1.05; }
+  .empty-note { color: var(--muted); font-size: 14px; padding-top: 10px; max-width: 56ch; }
+
+  /* Buttons and fields */
+  .btn { cursor: pointer; border-radius: 6px; padding: 9px 16px; border: 1px solid var(--line); background: transparent; font-weight: 600; font-size: 14px; }
+  .btn:hover { border-color: var(--fg); }
+  .btn.primary { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+  .btn.primary:hover { filter: brightness(1.08); }
+  .btn.small { padding: 5px 10px; font-size: 13px; }
+  .btn.danger { color: var(--loss); }
+  .btn.danger:hover { border-color: var(--loss); }
+  .btn.danger.solid { background: var(--loss); color: var(--bg); border-color: var(--loss); }
+  input[type="text"], input[type="date"] { width: 100%; min-width: 0; padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+  .field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .field label { font-size: 12px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+  .field-row { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 10px; margin-bottom: 18px; }
+
+  /* Log form */
+  .seat, .seat-head { display: grid; grid-template-columns: minmax(0, 1fr) 92px 92px; gap: 8px; align-items: center; }
+  .seat-head { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); padding-bottom: 6px; border-bottom: 2px solid var(--fg); }
+  .seat-head span:not(:first-child) { text-align: right; }
+  .seat { padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .seat-name { display: flex; flex-direction: column; min-width: 0; }
+  .seat-name b { font-weight: 600; overflow-wrap: anywhere; }
+  .seat-name .gone { font-size: 12px; color: var(--muted); }
+  .seat .net { font-family: var(--font-num); font-size: 12px; min-height: 18px; font-variant-numeric: tabular-nums; }
+  .seat input { text-align: right; font-family: var(--font-num); font-size: 14px; padding: 8px; }
+  .pot-line { margin-top: 14px; font-size: 13px; color: var(--muted); }
+  .pot-line.ok { color: var(--win); }
+  .pot-line.warn { color: var(--brass); }
+  .form-error { color: var(--loss); font-size: 13px; margin-top: 10px; min-height: 0; }
+  .form-error:empty { display: none; }
+  .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+  .editing { font-size: 13px; color: var(--brass); font-weight: 600; margin-bottom: 12px; }
+
+  /* History */
+  .session { padding: 16px 0; border-bottom: 1px solid var(--line); display: flex; flex-direction: column; gap: 10px; }
+  .session:first-child { padding-top: 0; }
+  .s-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 8px 16px; }
+  .s-head h3 { font-family: var(--font-display); font-weight: 700; font-size: 22px; text-transform: uppercase; letter-spacing: 0.04em; line-height: 1.1; }
+  .s-sub { font-size: 13px; color: var(--muted); }
+  .s-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .confirm-text { font-size: 13px; color: var(--muted); }
+  .mini { min-width: 300px; }
+  .mini th, .mini td { padding: 6px 8px; font-size: 13px; }
+  .mini td { border-bottom: 1px solid var(--line); }
+  .mini tr:last-child td { border-bottom: 0; }
+  .mini td:first-child, .mini th:first-child { text-align: left; font-family: var(--font-body); white-space: normal; padding-left: 0; }
+  #historyBody > .btn { margin-top: 16px; }
+
+  /* Players */
+  .pl { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .pl .nm { font-size: 15px; }
+  .pl .meta { font-size: 12px; color: var(--muted); }
+  .pl-main { display: flex; flex-direction: column; min-width: 0; }
+  .pl-confirm { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+  .add-form { display: flex; gap: 8px; margin-top: 16px; }
+  .add-form input { flex: 1; }
+
+  .edit-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 20px; padding: 12px 14px; border: 1px solid var(--brass); border-radius: 8px; background: var(--surface); }
+  .edit-bar p { font-size: 14px; max-width: 70ch; }
+  .sync { display: inline-flex; align-items: center; gap: 6px; }
+  .sync::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+  .sync.good::before { background: var(--win); }
+  .sync.bad::before { background: var(--loss); }
+
+  .toast-wrap {
+    position: fixed; inset: auto 0 0 0; display: flex; justify-content: center; pointer-events: none;
+    padding: 0 max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  }
+  .toast { background: var(--fg); color: var(--bg); padding: 10px 14px; border-radius: 6px; font-size: 14px; font-weight: 500; }
+  @media (prefers-reduced-motion: no-preference) {
+    .toast { animation: rise 0.18s ease-out; }
+    @keyframes rise { from { transform: translateY(6px); opacity: 0; } to { transform: none; opacity: 1; } }
+  }
+  :root { color-scheme: light; }
+  body { margin: 0; }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="top">
+    <div class="title-row">
+      <div class="title-block">
+        <h1 class="kicker">Poker season table</h1>
+        <input id="season" class="season" type="text" aria-label="Season name" maxlength="40" spellcheck="false" autocomplete="off" value="Season 1">
+      </div>
+      <div class="meta-right">
+        <span id="sync" class="sync" role="status">Connecting…</span>
+        <label class="cur" for="currency">Currency <input id="currency" type="text" maxlength="5" autocomplete="off" value="Rs"></label>
+      </div>
+    </div>
+    <div id="editBar" class="edit-bar" hidden>
+      <p id="editMsg"></p>
+      <div class="s-actions">
+        <button class="btn primary small" type="button" data-act="export">Download data.json</button>
+        <button class="btn small" type="button" data-act="copyjson">Copy JSON</button>
+        <button class="btn small danger" type="button" data-act="discard">Discard draft</button>
+      </div>
+    </div>
+    <ul id="stats" class="stats"></ul>
+  </header>
+
+  <main class="main">
+    <div class="col">
+      <section id="board" aria-labelledby="h-board">
+        <h2 id="h-board">Leaderboard</h2>
+        <div id="boardBody"></div>
+      </section>
+      <section id="history" aria-labelledby="h-history">
+        <h2 id="h-history">Session history</h2>
+        <div id="historyBody"></div>
+      </section>
+    </div>
+
+    <div class="col">
+      <section id="logPanel" class="panel" aria-labelledby="h-log">
+        <h2 id="h-log">Log a session</h2>
+        <form id="sessionForm" novalidate></form>
+      </section>
+      <section id="players" class="panel" aria-labelledby="h-players">
+        <h2 id="h-players">Players</h2>
+        <ul id="playerList"></ul>
+        <form id="addForm" class="add-form" novalidate>
+          <input id="newPlayer" type="text" maxlength="24" autocomplete="off" placeholder="Player name" aria-label="New player name">
+          <button class="btn primary" type="submit">Add</button>
+        </form>
+        <p id="addError" class="form-error" role="alert"></p>
+      </section>
+    </div>
+  </main>
+</div>
+<div class="toast-wrap"><div id="toast" class="toast" role="status" hidden></div></div>
+
+<script>
+(function () {
+  'use strict';
+  const LS_KEY = 'poker-season-draft-v1';
+  const POLL_MS = 60000;
+  const DEFAULTS = { season: 'Season 1', currency: 'Rs' };
+  const state = { players: [], sessions: [], settings: { season: DEFAULTS.season, currency: DEFAULTS.currency } };
+  let mode = 'boot', canWrite = false, synced = false, failed = false, hasDraft = false, lastRaw = '';
+  let showAll = false, pendingRemove = null, pendingDelete = null, toastTimer = null;
+  let form = blankForm(), formSig = '';
+
+  const $ = (s, r) => (r || document).querySelector(s);
+  const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const r2 = (x) => Math.round(x * 100) / 100;
+  const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  const nf = new Intl.NumberFormat(undefined, { maximumFractionDigits: 2 });
+
+  function today() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function blankForm() { return { editingId: null, date: today(), note: '', rows: {} }; }
+  function fmtDate(s) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+    if (!m) return s;
+    return new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  }
+  function money(n, signed) {
+    const r = r2(n);
+    const abs = nf.format(Math.abs(r));
+    const cur = (state.settings.currency || '').trim();
+    const body = cur ? (/[A-Za-z]$/.test(cur) ? cur + ' ' + abs : cur + abs) : abs;
+    if (!signed) return (r < 0 ? '−' : '') + body;
+    return (r > 0 ? '+' : r < 0 ? '−' : '') + body;
+  }
+  function parseAmt(v) {
+    const t = String(v == null ? '' : v).replace(/[,\s]/g, '');
+    if (t === '') return null;
+    const n = Number(t);
+    return Number.isFinite(n) ? n : NaN;
+  }
+  const cls = (n) => (n > 0 ? 'pos' : n < 0 ? 'neg' : '');
+
+  /* ---------- data cleaning (stored data is untrusted) ---------- */
+  function cleanPlayer(id, d) {
+    if (!d || typeof d.name !== 'string' || !d.name.trim()) return null;
+    return { id: String(id), name: d.name.trim().slice(0, 24), createdAt: Number(d.createdAt) || 0 };
+  }
+  function cleanSession(id, d) {
+    if (!d || typeof d.date !== 'string' || !Array.isArray(d.results)) return null;
+    const results = [];
+    for (const r of d.results) {
+      if (!r || typeof r.pid !== 'string') continue;
+      const b = Number(r.buyIn), o = Number(r.cashOut);
+      if (!Number.isFinite(b) || !Number.isFinite(o) || b < 0 || o < 0) continue;
+      results.push({ pid: r.pid, name: String(r.name || 'Player').slice(0, 24), buyIn: b, cashOut: o });
+    }
+    return { id: String(id), date: d.date, note: typeof d.note === 'string' ? d.note.slice(0, 80) : '', results, createdAt: Number(d.createdAt) || 0 };
+  }
+  function cleanSettings(d) {
+    const s = { season: DEFAULTS.season, currency: DEFAULTS.currency };
+    if (d && typeof d.season === 'string' && d.season.trim()) s.season = d.season.trim().slice(0, 40);
+    if (d && typeof d.currency === 'string') s.currency = d.currency.trim().slice(0, 5);
+    return s;
+  }
+
+  /* ---------- storage backends ---------- */
+  function snapshot() {
+    return {
+      settings: state.settings,
+      players: state.players.slice().sort((a, b) => a.createdAt - b.createdAt),
+      sessions: state.sessions.slice().sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt)
+    };
+  }
+  function persistLocal() {
+    if (mode !== 'edit') return;
+    try { localStorage.setItem(LS_KEY, JSON.stringify(snapshot())); hasDraft = true; } catch (e) {}
+  }
+  function applyData(d) {
+    state.players = (d.players || []).map((p) => cleanPlayer(p && p.id, p)).filter(Boolean).sort((a, b) => a.createdAt - b.createdAt || a.name.localeCompare(b.name));
+    state.sessions = (d.sessions || []).map((s) => cleanSession(s && s.id, s)).filter(Boolean);
+    state.settings = cleanSettings(d.settings);
+  }
+  function readDraft() {
+    try { const raw = localStorage.getItem(LS_KEY); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+  }
+  const upsert = (arr, item) => { const i = arr.findIndex((x) => x.id === item.id); if (i >= 0) arr[i] = item; else arr.push(item); };
+
+  const store = {
+    async savePlayer(p) {
+      upsert(state.players, p); persistLocal(); renderAll();
+    },
+    async deletePlayer(id) {
+      state.players = state.players.filter((p) => p.id !== id); persistLocal(); renderAll();
+    },
+    async saveSession(id, doc) {
+      upsert(state.sessions, Object.assign({ id }, doc)); persistLocal(); renderAll();
+    },
+    async deleteSession(id) {
+      state.sessions = state.sessions.filter((s) => s.id !== id); persistLocal(); renderAll();
+    },
+    async saveSettings(patch) {
+      const next = Object.assign({}, state.settings, patch);
+      state.settings = next;
+      persistLocal(); renderAll();
+    }
+  };
+
+  async function run(fn, okMsg) {
+    if (!canWrite) return false;
+    try { await fn(); if (okMsg) notify(okMsg); return true; }
+    catch (e) {
+      notify("Couldn't save the change in this browser.");
+      return false;
+    }
+  }
+  function notify(msg) {
+    const t = $('#toast');
+    t.textContent = msg; t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.hidden = true; }, 3200);
+  }
+
+  /* ---------- numbers ---------- */
+  function compute() {
+    const rows = state.players.map((p) => ({ id: p.id, name: p.name, played: 0, buy: 0, out: 0, won: 0, lost: 0, net: 0, rank: null }));
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    let pot = 0, best = null, worst = null;
+    for (const s of state.sessions) {
+      for (const r of s.results) {
+        const net = r2(r.cashOut - r.buyIn);
+        pot += r.buyIn;
+        const row = byId.get(r.pid);
+        if (row) {
+          row.played++; row.buy += r.buyIn; row.out += r.cashOut; row.net += net;
+          if (net > 0) row.won += net; else if (net < 0) row.lost += -net;
+        }
+        if (net > 0 && (!best || net > best.net)) best = { net, name: r.name, date: s.date };
+        if (net < 0 && (!worst || net < worst.net)) worst = { net, name: r.name, date: s.date };
+      }
+    }
+    for (const r of rows) { r.buy = r2(r.buy); r.out = r2(r.out); r.net = r2(r.net); r.won = r2(r.won); r.lost = r2(r.lost); }
+    rows.sort((a, b) => ((b.played > 0) - (a.played > 0)) || (b.net - a.net) || (b.played - a.played) || a.name.localeCompare(b.name));
+    let rank = 0;
+    rows.forEach((r, i) => {
+      if (!r.played) return;
+      if (i === 0 || r.net !== rows[i - 1].net) rank = i + 1;
+      r.rank = rank;
+    });
+    return { rows, pot: r2(pot), best, worst };
+  }
+
+  /* ---------- rendering ---------- */
+  function renderAll() {
+    const c = compute();
+    renderHeader(c);
+    renderBoard(c);
+    renderHistory();
+    renderPlayers(c);
+    renderForm(false);
+    renderSync();
+  }
+
+  function renderSync() {
+    const el = $('#sync');
+    let text, tone = '';
+    if (mode === 'boot') text = 'Loading…';
+    else if (failed) { text = "Can't load data.json"; tone = 'bad'; }
+    else if (mode === 'edit') { text = hasDraft ? 'Editing · unpublished draft' : 'Editing · no changes yet'; }
+    else { text = 'Live · refreshes every minute'; tone = 'good'; }
+    el.textContent = text;
+    el.className = 'sync ' + tone;
+    const bar = $('#editBar');
+    bar.hidden = mode !== 'edit';
+    if (mode === 'edit') $('#editMsg').textContent = hasDraft
+      ? 'Your changes are saved in this browser only. Download data.json and upload it to GitHub so everyone else sees them.'
+      : 'Edit mode. Changes stay in this browser until you download data.json and upload it to GitHub.';
+  }
+
+  function renderHeader(c) {
+    const s = $('#season'), cur = $('#currency');
+    if (document.activeElement !== s) s.value = state.settings.season;
+    if (document.activeElement !== cur) cur.value = state.settings.currency;
+    s.readOnly = !canWrite; cur.readOnly = !canWrite;
+    const items = [];
+    const lead = c.rows[0];
+    items.push(['Sessions', String(state.sessions.length)]);
+    if (lead && lead.played) items.push(['Leading', esc(lead.name) + ' <span class="' + cls(lead.net) + '">' + money(lead.net, true) + '</span>']);
+    if (state.sessions.length) items.push(['Bought in', money(c.pot)]);
+    if (c.best) items.push(['Biggest win', esc(c.best.name) + ' <span class="pos">' + money(c.best.net, true) + '</span>']);
+    if (c.worst) items.push(['Biggest loss', esc(c.worst.name) + ' <span class="neg">' + money(c.worst.net, true) + '</span>']);
+    $('#stats').innerHTML = items.map((it) => '<li><span class="k">' + it[0] + '</span><span class="v">' + it[1] + '</span></li>').join('');
+  }
+
+  function renderBoard(c) {
+    const el = $('#boardBody');
+    if (!state.players.length) {
+      el.innerHTML = '<div class="empty"><p class="empty-title">No players at the table yet</p><p>Add everyone who plays, then log your first session. Rank, winnings, losses and net fill in from there.</p>' +
+        (canWrite ? '<button class="btn primary" type="button" data-act="focus-add">Add a player</button>' : '') + '</div>';
+      return;
+    }
+    let tb = 0, tw = 0, tl = 0, tn = 0;
+    const body = c.rows.map((r) => {
+      tb += r.buy; tw += r.won; tl += r.lost; tn += r.net;
+      const p = r.played > 0;
+      return '<tr class="' + (p ? (r.rank === 1 ? 'lead' : '') : 'idle') + '">' +
+        '<td class="who"><div class="who-in"><span class="rk">' + (p ? r.rank : '–') + '</span><span class="nm">' + esc(r.name) + '</span></div></td>' +
+        '<td>' + (p ? r.played : '–') + '</td>' +
+        '<td>' + (p ? money(r.buy) : '–') + '</td>' +
+        '<td class="pos">' + (r.won ? money(r.won, true) : '–') + '</td>' +
+        '<td class="neg">' + (r.lost ? money(-r.lost, true) : '–') + '</td>' +
+        '<td class="net ' + cls(r.net) + '">' + (p ? money(r.net, true) : '–') + '</td></tr>';
+    }).join('');
+    el.innerHTML = '<div class="table-wrap"><table class="board"><thead><tr>' +
+      '<th class="who" scope="col">Player</th><th scope="col">Played</th><th scope="col">Buy-ins</th><th scope="col">Won</th><th scope="col">Lost</th><th scope="col">Net</th></tr></thead>' +
+      '<tbody>' + body + '</tbody>' +
+      '<tfoot><tr><td class="who">Table total</td><td></td><td>' + money(tb) + '</td><td class="pos">' + (tw ? money(tw, true) : '–') + '</td><td class="neg">' + (tl ? money(-tl, true) : '–') + '</td><td class="' + cls(r2(tn)) + '">' + money(tn, true) + '</td></tr></tfoot></table></div>' +
+      (state.sessions.length ? '' : '<p class="empty-note">' + (canWrite ? 'Log a session to start the scoring.' : 'No sessions logged yet.') + '</p>');
+  }
+
+  function sessionHtml(s) {
+    const results = s.results.slice().sort((a, b) => (b.cashOut - b.buyIn) - (a.cashOut - a.buyIn));
+    const total = r2(results.reduce((t, r) => t + r.buyIn, 0));
+    let actions = '';
+    if (canWrite) {
+      if (pendingDelete === s.id) {
+        actions = '<span class="confirm-text">Delete this session? Totals will update.</span>' +
+          '<button class="btn small danger solid" type="button" data-act="do-delete" data-id="' + esc(s.id) + '">Delete</button>' +
+          '<button class="btn small" type="button" data-act="cancel-delete">Keep</button>';
+      } else {
+        actions = '<button class="btn small" type="button" data-act="edit" data-id="' + esc(s.id) + '">Edit</button>' +
+          '<button class="btn small danger" type="button" data-act="ask-delete" data-id="' + esc(s.id) + '">Delete</button>';
+      }
+    }
+    const rowsHtml = results.map((r) => {
+      const net = r2(r.cashOut - r.buyIn);
+      return '<tr><td>' + esc(r.name) + '</td><td>' + money(r.buyIn) + '</td><td>' + money(r.cashOut) + '</td><td class="' + cls(net) + '">' + money(net, true) + '</td></tr>';
+    }).join('');
+    return '<article class="session"><div class="s-head"><div><h3>' + esc(fmtDate(s.date)) + '</h3><p class="s-sub">' +
+      (s.note ? esc(s.note) + ' · ' : '') + results.length + ' players · ' + money(total) + ' on the table</p></div>' +
+      '<div class="s-actions">' + actions + '</div></div>' +
+      '<div class="table-wrap"><table class="mini"><thead><tr><th scope="col">Player</th><th scope="col">In</th><th scope="col">Out</th><th scope="col">Net</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div></article>';
+  }
+
+  function renderHistory() {
+    const el = $('#historyBody');
+    if (!state.sessions.length) {
+      el.innerHTML = '<p class="empty-note" style="padding-top:0">Nothing logged yet. Every session you log lands here with each player\'s buy-in, cash-out and result.</p>';
+      return;
+    }
+    const list = state.sessions.slice().sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+    const vis = showAll ? list : list.slice(0, 4);
+    el.innerHTML = vis.map(sessionHtml).join('') +
+      (list.length > 4 ? '<button class="btn" type="button" data-act="show-all">' + (showAll ? 'Show fewer' : 'Show all ' + list.length + ' sessions') + '</button>' : '');
+  }
+
+  function renderPlayers(c) {
+    const played = new Map(c.rows.map((r) => [r.id, r.played]));
+    const el = $('#playerList');
+    if (!state.players.length) {
+      el.innerHTML = '<li class="empty-note" style="padding-top:0">Nobody here yet. Add players below.</li>';
+    } else {
+      el.innerHTML = state.players.map((p) => {
+        const n = played.get(p.id) || 0;
+        let right = '';
+        if (canWrite) {
+          if (pendingRemove === p.id) {
+            return '<li class="pl"><div class="pl-confirm"><span class="confirm-text">Remove ' + esc(p.name) + '? ' +
+              (n ? 'Their ' + n + ' logged ' + (n === 1 ? 'session stays' : 'sessions stay') + ' in history, but they leave the leaderboard.' : 'They have no sessions yet.') +
+              '</span><div class="s-actions"><button class="btn small danger solid" type="button" data-act="do-remove" data-id="' + esc(p.id) + '">Remove</button>' +
+              '<button class="btn small" type="button" data-act="cancel-remove">Keep</button></div></div></li>';
+          }
+          right = '<button class="btn small danger" type="button" data-act="ask-remove" data-id="' + esc(p.id) + '" aria-label="Remove ' + esc(p.name) + '">Remove</button>';
+        }
+        return '<li class="pl"><div class="pl-main"><span class="nm">' + esc(p.name) + '</span><span class="meta">' + n + (n === 1 ? ' session' : ' sessions') + '</span></div>' + right + '</li>';
+      }).join('');
+    }
+    $('#addForm').hidden = !canWrite;
+  }
+
+  /* ---------- session form ---------- */
+  function formPlayers() {
+    const list = state.players.map((p) => ({ id: p.id, name: p.name, gone: false }));
+    if (form.editingId) {
+      const s = state.sessions.find((x) => x.id === form.editingId);
+      if (s) for (const r of s.results) if (!list.some((p) => p.id === r.pid)) list.push({ id: r.pid, name: r.name, gone: true });
+    }
+    return list;
+  }
+  function readForm() {
+    const d = $('#fDate'), n = $('#fNote');
+    if (!d) return;
+    form.date = d.value; form.note = n.value;
+    for (const row of $$('.seat[data-pid]')) {
+      form.rows[row.dataset.pid] = { buy: row.querySelector('.buy').value, out: row.querySelector('.out').value };
+    }
+  }
+  function renderForm(force) {
+    $('#logPanel').hidden = !canWrite;
+    if (!canWrite) return;
+    const players = formPlayers();
+    const sig = players.map((p) => p.id).join(',') + '|' + (form.editingId || '');
+    if (!force && sig === formSig && $('#fDate')) return;
+    if ($('#fDate')) readForm();
+    formSig = sig;
+    const f = $('#sessionForm');
+    if (!players.length) {
+      f.innerHTML = '<p class="hint" style="margin:0">Add at least two players first, then log what each of them bought in for and cashed out with.</p>';
+      return;
+    }
+    const seats = players.map((p) => {
+      const v = form.rows[p.id] || { buy: '', out: '' };
+      return '<div class="seat" data-pid="' + esc(p.id) + '"><div class="seat-name"><b>' + esc(p.name) + '</b>' +
+        (p.gone ? '<span class="gone">Removed player</span>' : '') + '<output class="net"></output></div>' +
+        '<input class="buy" type="text" inputmode="decimal" autocomplete="off" placeholder="0" id="buy-' + esc(p.id) + '" aria-label="' + esc(p.name) + ' buy-in" value="' + esc(v.buy) + '">' +
+        '<input class="out" type="text" inputmode="decimal" autocomplete="off" placeholder="0" id="out-' + esc(p.id) + '" aria-label="' + esc(p.name) + ' cash-out" value="' + esc(v.out) + '"></div>';
+    }).join('');
+    f.innerHTML =
+      (form.editingId ? '<p class="editing">Editing a saved session</p>' : '') +
+      '<div class="field-row"><div class="field"><label for="fDate">Date</label><input id="fDate" type="date" value="' + esc(form.date) + '"></div>' +
+      '<div class="field"><label for="fNote">Note</label><input id="fNote" type="text" maxlength="80" autocomplete="off" placeholder="Where, game, stakes" value="' + esc(form.note) + '"></div></div>' +
+      '<p class="hint">Leave a player blank if they sat out. Busted? Enter their buy-in and leave cash-out at 0.</p>' +
+      '<div class="seat-head"><span>Player</span><span>Buy-in</span><span>Cash-out</span></div>' + seats +
+      '<p id="potLine" class="pot-line"></p><p id="formError" class="form-error" role="alert"></p>' +
+      '<div class="actions"><button class="btn primary" type="submit">' + (form.editingId ? 'Update session' : 'Save session') + '</button>' +
+      (form.editingId ? '<button class="btn" type="button" data-act="cancel-edit">Cancel</button>' : '') + '</div>';
+    updateTotals();
+  }
+  function updateTotals() {
+    let tin = 0, tout = 0, n = 0;
+    for (const row of $$('.seat[data-pid]')) {
+      const b = parseAmt(row.querySelector('.buy').value), o = parseAmt(row.querySelector('.out').value);
+      const out = row.querySelector('.net');
+      if (b === null && o === null) { out.textContent = ''; out.className = 'net'; continue; }
+      if (Number.isNaN(b) || Number.isNaN(o) || (b !== null && b < 0) || (o !== null && o < 0)) { out.textContent = 'Check amount'; out.className = 'net neg'; continue; }
+      const net = r2((o || 0) - (b || 0));
+      tin += b || 0; tout += o || 0; n++;
+      out.textContent = money(net, true); out.className = 'net ' + cls(net);
+    }
+    tin = r2(tin); tout = r2(tout);
+    const el = $('#potLine'); if (!el) return;
+    const diff = r2(tout - tin);
+    if (!n) { el.className = 'pot-line'; el.textContent = 'Cash-outs should add up to buy-ins.'; }
+    else if (diff === 0) { el.className = 'pot-line ok'; el.textContent = 'Balanced. ' + money(tin) + ' in, ' + money(tout) + ' out.'; }
+    else { el.className = 'pot-line warn'; el.textContent = 'Cash-outs are ' + money(Math.abs(diff)) + (diff > 0 ? ' over' : ' short of') + ' buy-ins (' + money(tin) + ' in, ' + money(tout) + ' out). Check before saving.'; }
+  }
+  function showFormError(msg) { const e = $('#formError'); if (e) e.textContent = msg; }
+
+  async function submitForm(ev) {
+    ev.preventDefault();
+    readForm();
+    const results = [];
+    let totalIn = 0;
+    for (const p of formPlayers()) {
+      const r = form.rows[p.id] || {};
+      const b = parseAmt(r.buy), o = parseAmt(r.out);
+      if (b === null && o === null) continue;
+      if (Number.isNaN(b) || Number.isNaN(o) || (b !== null && b < 0) || (o !== null && o < 0)) return showFormError('Check the amounts for ' + p.name + '. Use plain positive numbers.');
+      results.push({ pid: p.id, name: p.name, buyIn: r2(b || 0), cashOut: r2(o || 0) });
+      totalIn += b || 0;
+    }
+    if (!form.date) return showFormError('Pick the date of the session.');
+    if (results.length < 2) return showFormError('Enter amounts for at least two players.');
+    if (totalIn <= 0) return showFormError('A session needs at least one buy-in above zero.');
+    showFormError('');
+    const id = form.editingId || uid();
+    const existing = state.sessions.find((s) => s.id === id);
+    const doc = { date: form.date, note: form.note.trim().slice(0, 80), results, createdAt: existing ? existing.createdAt : Date.now() };
+    const wasEdit = !!form.editingId;
+    const ok = await run(() => store.saveSession(id, doc), wasEdit ? 'Session updated' : 'Session saved');
+    if (ok) { form = blankForm(); renderForm(true); }
+  }
+
+  async function addPlayer(ev) {
+    ev.preventDefault();
+    const inp = $('#newPlayer'), err = $('#addError');
+    const name = inp.value.trim().replace(/\s+/g, ' ').slice(0, 24);
+    err.textContent = '';
+    if (!name) { err.textContent = 'Type a name first.'; return; }
+    if (state.players.some((p) => p.name.toLowerCase() === name.toLowerCase())) { err.textContent = name + ' is already on the table.'; return; }
+    if (state.players.length >= 30) { err.textContent = 'The table holds up to 30 players.'; return; }
+    const ok = await run(() => store.savePlayer({ id: uid(), name, createdAt: Date.now() }));
+    if (ok) { inp.value = ''; inp.focus(); }
+  }
+
+  /* ---------- events ---------- */
+  $('#sessionForm').addEventListener('input', () => { readForm(); updateTotals(); });
+  $('#sessionForm').addEventListener('submit', submitForm);
+  $('#addForm').addEventListener('submit', addPlayer);
+  $('#season').addEventListener('change', (e) => {
+    if (!canWrite) return;
+    const v = e.target.value.trim().slice(0, 40) || DEFAULTS.season;
+    e.target.value = v; run(() => store.saveSettings({ season: v }));
+  });
+  $('#currency').addEventListener('change', (e) => {
+    if (!canWrite) return;
+    const v = e.target.value.trim().slice(0, 5);
+    run(() => store.saveSettings({ currency: v }));
+  });
+  const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  document.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-act]');
+    if (!b) return;
+    const id = b.dataset.id;
+    switch (b.dataset.act) {
+      case 'focus-add': $('#newPlayer').scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' }); $('#newPlayer').focus(); break;
+      case 'ask-remove': pendingRemove = id; renderAll(); break;
+      case 'cancel-remove': pendingRemove = null; renderAll(); break;
+      case 'do-remove':
+        pendingRemove = null; delete form.rows[id];
+        run(() => store.deletePlayer(id), 'Player removed');
+        break;
+      case 'ask-delete': pendingDelete = id; renderAll(); break;
+      case 'cancel-delete': pendingDelete = null; renderAll(); break;
+      case 'do-delete':
+        pendingDelete = null;
+        if (form.editingId === id) form = blankForm();
+        run(() => store.deleteSession(id), 'Session deleted').then(() => renderForm(true));
+        break;
+      case 'show-all': showAll = !showAll; renderHistory(); break;
+      case 'edit': {
+        const s = state.sessions.find((x) => x.id === id);
+        if (!s) break;
+        form = { editingId: id, date: s.date, note: s.note || '', rows: {} };
+        for (const r of s.results) form.rows[r.pid] = { buy: String(r.buyIn), out: String(r.cashOut) };
+        renderForm(true);
+        $('#logPanel').scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' });
+        const d = $('#fDate'); if (d) d.focus({ preventScroll: true });
+        break;
+      }
+      case 'cancel-edit': form = blankForm(); renderForm(true); break;
+      case 'export': download(); break;
+      case 'copyjson': copyJson(); break;
+      case 'discard': discardDraft(); break;
+    }
+  });
+
+  /* ---------- boot ---------- */
+  async function fetchData() {
+    const r = await fetch('data.json?t=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const text = await r.text();
+    return { text, data: JSON.parse(text) };
+  }
+  function download() {
+    const blob = new Blob([JSON.stringify(snapshot(), null, 2) + '\n'], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'data.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    notify('data.json downloaded. Upload it to GitHub to publish.');
+  }
+  async function copyJson() {
+    const text = JSON.stringify(snapshot(), null, 2) + '\n';
+    try { await navigator.clipboard.writeText(text); notify('JSON copied. Paste it into data.json on GitHub.'); }
+    catch (e) { notify("Couldn't copy. Use Download data.json instead."); }
+  }
+  async function discardDraft() {
+    try { localStorage.removeItem(LS_KEY); } catch (e) {}
+    hasDraft = false;
+    try { const f = await fetchData(); applyData(f.data); lastRaw = f.text; } catch (e) {}
+    form = blankForm(); renderForm(true); renderAll();
+    notify('Draft discarded. Showing the published table.');
+  }
+
+  async function init() {
+    mode = /(^|[#&])edit$/.test(location.hash.slice(1)) ? 'edit' : 'view';
+    canWrite = mode === 'edit';
+    renderAll();
+    let published = null;
+    try { const f = await fetchData(); published = f.data; lastRaw = f.text; } catch (e) { failed = true; }
+    const draft = mode === 'edit' ? readDraft() : null;
+    if (draft) { applyData(draft); hasDraft = true; }
+    else if (published) applyData(published);
+    else if (mode === 'edit') applyData({});
+    renderAll();
+    if (mode === 'view') {
+      setInterval(async () => {
+        try {
+          const f = await fetchData();
+          if (f.text !== lastRaw) { lastRaw = f.text; applyData(f.data); failed = false; renderAll(); }
+        } catch (e) {}
+      }, POLL_MS);
+    }
+  }
+  window.addEventListener('hashchange', () => location.reload());
+  init();
+})();
+</script>
+</body>
+</html>
